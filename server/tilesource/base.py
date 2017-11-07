@@ -26,7 +26,6 @@ try:
     import girder
     from girder import logger
     from girder.models.model_base import ValidationException
-    from girder.utility import assetstore_utilities
     from girder.utility.model_importer import ModelImporter
     from ..models.base import TileGeneralException
     from girder.models.model_base import AccessType
@@ -1669,27 +1668,18 @@ if girder:
         def _getLargeImagePath(self):
             try:
                 largeImageFileId = self.item['largeImage']['fileId']
+                fileModel = ModelImporter.model('file')
                 # Access control checking should already have been done on
                 # item, so don't repeat.
                 # TODO: is it possible that the file is on a different item, so
                 # do we want to repeat the access check?
-                largeImageFile = ModelImporter.model('file').load(
-                    largeImageFileId, force=True)
-
-                # TODO: can we move some of this logic into Girder core?
-                assetstore = ModelImporter.model('assetstore').load(
-                    largeImageFile['assetstoreId'])
-                adapter = assetstore_utilities.getAssetstoreAdapter(assetstore)
-
-                if not isinstance(
-                        adapter,
-                        assetstore_utilities.FilesystemAssetstoreAdapter):
-                    raise TileSourceAssetstoreException(
-                        'Non-filesystem assetstores are not supported')
-
-                largeImagePath = adapter.fullPath(largeImageFile)
-                return largeImagePath
-
+                largeImageFile = fileModel.load(largeImageFileId, force=True)
+                if hasattr(fileModel, 'getFilePath'):
+                    return fileModel.getFilePath(largeImageFile)
+                adapter = fileModel.getAssetstoreAdapter(largeImageFile)
+                if hasattr(adapter, 'fullPath'):
+                    return adapter.fullPath(largeImageFile)
+                raise TileSourceAssetstoreException('Item cannot be accessed as a file')
             except TileSourceAssetstoreException:
                 raise
             except (KeyError, ValidationException, TileSourceException) as e:
